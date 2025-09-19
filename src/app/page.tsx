@@ -19,7 +19,7 @@ const page = () => {
   return (
     <div className="p-4 max-w-7xl mx-4">
       <Input value={value} onChange={(e) => setValue(e.target.value) } placeholder="write anything here..."/>
-      <Button disabled={invoke.isPending} onClick={() => invoke.mutate({ val: value })}>
+      <Button disabled={invoke.isPending} onClick={() => invoke.mutate({ value: value })}>
         Invoke Background Job
       </Button>
     </div>
