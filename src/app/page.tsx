@@ -18,6 +18,7 @@ const page = () => {
         toast.error(e.message);
       },
       onSuccess: (data) => {
+        toast.success("You are redirecting to CodeSheet ans page");
         router.push(`/projects/${data.id}`);
       }
     })
