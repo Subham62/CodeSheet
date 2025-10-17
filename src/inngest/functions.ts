@@ -16,7 +16,7 @@ import prisma from "@/lib/db";
 
 interface AgentState {
   summary: string;
-  files: {[path: string] : string};
+  files: { [path: string]: string };
 }
 
 export const codeAgentFunction = inngest.createFunction(
@@ -75,6 +75,44 @@ export const codeAgentFunction = inngest.createFunction(
           },
         }),
 
+        // createTool({
+        //   name: "createOrUpdateFiles",
+        //   description: "Create or update files in the sandbox",
+        //   parameters: z.object({
+        //     files: z.array(
+        //       z.object({
+        //         path: z.string(),
+        //         content: z.string(),
+        //       })
+        //     ),
+        //   }),
+        //   handler: async ({ files }, { step, network } : Tool.Options<AgentState>) => {
+        //     const newFiles = await step?.run("createOrUpdateFiles", async () => {
+        //       // console.log("createOrUpdateFiles called with:", files);
+        //       try {
+        //         // const updateFiles = {...(network.state.data.files || {})};
+        //         const updateFiles = (network.state.data.files || {});
+        //         const sandbox = await getSandbox(sandboxId);
+        //         for (const file of files) {
+        //           await sandbox.files.write(file.path, file.content);
+        //           updateFiles[file.path] = file.content;
+        //         }
+
+        //         // network.state.data.files = updateFiles;
+        //         // return { updated: Object.keys(updateFiles) };
+        //         return updateFiles;
+        //       } catch (error) {
+        //         console.error("Error writing files:", error);
+        //         return { error: String(error) };
+        //       }
+        //     });
+
+        //     if(typeof newFiles === "object"){
+        //       network.state.data.files = newFiles;
+        //     }
+        //   },
+        // }),
+
         createTool({
           name: "createOrUpdateFiles",
           description: "Create or update files in the sandbox",
@@ -86,28 +124,62 @@ export const codeAgentFunction = inngest.createFunction(
               })
             ),
           }),
-          handler: async ({ files }, { step, network } : Tool.Options<AgentState>) => {
-            const newFiles = await step?.run("createOrUpdateFiles", async () => {
-              // console.log("createOrUpdateFiles called with:", files);
-              try {
-                // const updateFiles = {...(network.state.data.files || {})};
-                const updateFiles = (network.state.data.files || {});
-                const sandbox = await getSandbox(sandboxId);
-                for (const file of files) {
-                  await sandbox.files.write(file.path, file.content);
-                  updateFiles[file.path] = file.content;
+          handler: async (
+            { files },
+            { step, network }: Tool.Options<AgentState>
+          ) => {
+            // Helper: ensure sandbox is ready with retries
+            async function getReadySandbox(
+              sandboxId: string,
+              retries = 5,
+              delayMs = 500
+            ) {
+              for (let i = 0; i < retries; i++) {
+                try {
+                  const sandbox = await getSandbox(sandboxId);
+                  // Simple connectivity test: check if root exists
+                  await sandbox.files.exists("");
+                  return sandbox;
+                } catch (err) {
+                  console.warn(`Sandbox not ready (attempt ${i + 1}):`, err);
+                  await new Promise((r) => setTimeout(r, delayMs));
                 }
-
-                // network.state.data.files = updateFiles;
-                // return { updated: Object.keys(updateFiles) };
-                return updateFiles;
-              } catch (error) {
-                console.error("Error writing files:", error);
-                return { error: String(error) };
               }
-            });
+              throw new Error("Sandbox failed to connect after retries");
+            }
 
-            if(typeof newFiles === "object"){
+            const newFiles = await step?.run(
+              "createOrUpdateFiles",
+              async () => {
+                try {
+                  // Initialize network files object
+                  network.state.data.files = network.state.data.files || {};
+
+                  const sandbox = await getReadySandbox(sandboxId);
+
+                  for (const file of files) {
+                    try {
+                      await sandbox.files.write(file.path, file.content);
+                      network.state.data.files[file.path] = file.content;
+                    } catch (writeError) {
+                      console.error(
+                        `Failed to write file ${file.path}:`,
+                        writeError
+                      );
+                    }
+                  }
+
+                  // Return all updated files
+                  return network.state.data.files;
+                } catch (error) {
+                  console.error("Error creating/updating files:", error);
+                  return { error: String(error) };
+                }
+              }
+            );
+
+            // Ensure network state is updated
+            if (typeof newFiles === "object" && !("error" in newFiles)) {
               network.state.data.files = newFiles;
             }
           },
@@ -148,12 +220,10 @@ export const codeAgentFunction = inngest.createFunction(
 
           console.log("Agent response:", lastAssistantMessageText);
 
-          if (
-            lastAssistantMessageText && network) {
-              if(lastAssistantMessageText.includes("<task_summary>")){
-                network.state.data.summary = lastAssistantMessageText;
-              }
-            
+          if (lastAssistantMessageText && network) {
+            if (lastAssistantMessageText.includes("<task_summary>")) {
+              network.state.data.summary = lastAssistantMessageText;
+            }
           }
 
           return result;
@@ -179,9 +249,28 @@ export const codeAgentFunction = inngest.createFunction(
     });
 
     // Run agent with user input
-    const result = await network.run(event.data.value);
+    // const result = await network.run(event.data.value);
+    // this above line replaced by below couples of lines
+    
+    // -----------------
+    async function runAgentWithRetry(network: ReturnType<typeof createNetwork<AgentState>> , input: string, retries = 3) {
+      for (let i = 0; i < retries; i++) {
+        try {
+          return await network.run(input);
+        } catch (err) {
+          console.warn(`AI request failed (attempt ${i + 1}):`, err);
+          await new Promise((r) => setTimeout(r, 500)); // wait 500ms before retry
+        }
+      }
+      throw new Error("AI request failed after retries");
+    }
 
-    const isError = !result.state.data.summary || Object.keys(result.state.data.files || {}).length === 0;
+    const result = await runAgentWithRetry(network, event.data.value);
+    // -----------------
+
+    const isError =
+      !result.state.data.summary ||
+      Object.keys(result.state.data.files || {}).length === 0;
 
     // Get sandbox URL
     const sandboxUrl = await step.run("get-sandbox-url", async () => {
@@ -191,15 +280,15 @@ export const codeAgentFunction = inngest.createFunction(
     });
 
     await step.run("save-result", async () => {
-      if(isError){
+      if (isError) {
         return await prisma.message.create({
           data: {
             projectId: event.data.projectId,
             content: "Somrthing went wrong. Please try again",
             role: "ASSISTANT",
-            type: "ERROR"
-          }
-        })
+            type: "ERROR",
+          },
+        });
       }
 
       return await prisma.message.create({
@@ -233,9 +322,6 @@ export const codeAgentFunction = inngest.createFunction(
     return response;
   }
 );
-
-
-
 
 // Key insight: How step.run() manages network.state internally
 
