@@ -5,41 +5,51 @@ import {
   ResizablePanel,
   ResizablePanelGroup,
 } from "@/components/ui/resizable";
-// import { useTRPC } from "@/trpc/client";
-// import { useSuspenseQuery } from "@tanstack/react-query";
+import { Suspense, useState } from "react";
+import { Fragment } from "@/generated/prisma";
+import { ProjectHeader } from "../components/project-header";
 import { MessagesContainer } from "../components/messages-container";
-import { Suspense } from "react";
 
 interface Props {
   projectId: string;
 }
 
 export const ProjectView = ({ projectId }: Props) => {
-//   const trpc = useTRPC();
-//   const { data } = useSuspenseQuery(
-//     trpc.projects.getOne.queryOptions({
-//       id: projectId,
-//     })
-//   );
+  const [activeFragment, setActiveFragment] = useState<Fragment | null>(null);
 
   return (
-    <div className="h-screen">
-      <ResizablePanelGroup direction="horizontal">
+    <div className="h-screen flex flex-col">
+      <ResizablePanelGroup direction="horizontal" className="flex-1">
         <ResizablePanel
           defaultSize={35}
           minSize={20}
-          className="flex flex-col min-h-0"
+          className="flex flex-col h-full"
         >
-          {/* {JSON.stringify(projectId)} */}
-          <Suspense fallback={<p>Loading messages...</p>}>
-            <MessagesContainer projectId={projectId}/>      
-            {/* if we use the deeper container like MessageContainer then it will not block the entire page as useSuspenseQuery takes time and now it is separate from this page and it is visually faster not really */}
+          {/* Sticky Header */}
+          <Suspense fallback={<p className="p-2">Loading project...</p>}>
+            <ProjectHeader projectId={projectId} />
           </Suspense>
+
+          {/* Scrollable Messages */}
+          <div className="flex-1 min-h-0 overflow-y-auto">
+            <Suspense fallback={<p className="p-2">Loading messages...</p>}>
+              <MessagesContainer
+                projectId={projectId}
+                activeFragment={activeFragment}
+                setActiveFragment={setActiveFragment}
+              />
+              {/* if we use the deeper container like MessageContainer then it will not block the entire page as useSuspenseQuery takes time and now it is separate from this page and it is visually faster not really */}
+            </Suspense>
+          </div>
         </ResizablePanel>
-        <ResizableHandle />
+
+        <ResizableHandle withHandle />
+
+        {/*  RIGHT PANEL — Preview area */}
         <ResizablePanel defaultSize={65} minSize={50}>
-          {/* {JSON.stringify(messages, null, 2)} */}
-          TODO: Preview
+          {/* <div className="h-full flex items-center justify-center text-muted-foreground"> */}
+            TODO: Preview
+          {/* </div> */}
         </ResizablePanel>
       </ResizablePanelGroup>
     </div>
