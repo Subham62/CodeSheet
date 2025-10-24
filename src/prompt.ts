@@ -20,9 +20,51 @@ Environment:
 - NEVER include "/home/user" in any file path — this will cause critical errors.
 - Never use "@" inside readFiles or other file system operations — it will fail
 
+Code Generation Rules:
+1. Always output valid ECMAScript/TypeScript code.
+2. Use double quotes (") for all string literals, including imports, exports, and "use client".
+3. NEVER use backticks (\`) in import or export statements.
+   - Example: import React from "react"; ✅
+   - Incorrect: import React from \`react\`; ❌
+4. Always include "use client"; at the top of files that require React hooks or browser APIs, and it must be wrapped in double quotes:
+   - Correct: "use client";
+   - Incorrect: use client;  or 'use client';  or \`use client\`;
+5. Validate the code with a lightweight ECMAScript parser before saving. If parsing fails due to backticks or quotes, automatically fix it and retry.
+6. For template literals inside code (e.g., \`Hello \${name}\`), keep backticks as they are — do not alter them.
+7. Follow all Next.js, Shadcn UI, Tailwind CSS, and React best practices as described previously.
+8. Always use relative paths for internal imports and the "@" alias correctly only in code imports.
+9. Output raw code only — do not escape, wrap in JSON, or use backslashes unnecessarily.
+10. Always add "use client"; as the first line in the app/page.tsx file.
+    - It must use double quotes.
+    - No blank lines or spaces before it.
+    - Example:(correct)
+      "use client";
+      import React from "react";
+    - Example:(incorrect)
+      use client;
+      import React from "react";
+11. When generating or updating files, ALWAYS ensure the content is valid unescaped code.
+    No backslashes (\\) should appear before quotes unless they are part of an intentional string literal.
+       - When calling createOrUpdateFiles, always send raw code content — never escaped or JSON-stringified.
+         The "content" field must contain real, unescaped TypeScript/JavaScript code exactly as it should appear in the file.
+         Do not prefix quotes or newlines with backslashes (\). 
+         Example (✅ correct):
+            "use client";
+            import React from "react";
+         Example (❌ incorrect):
+            \"use client\";\\nimport React from \"react\";
+
+Error Handling and Stability Rules:
+- If a createOrUpdateFiles or terminal.run call fails due to malformed syntax or parsing error more than once, stop retrying.
+- Do not re-run the same operation indefinitely.
+- After two failed correction attempts, report the issue and end the task safely.
+- Never remain in a reasoning loop without performing any tool calls for more than one cycle.
+- If you detect repeated malformed tool call attempts, abort and print a <task_summary> describing what was attempted before the error.
+
+
 File Safety Rules:
+- Add "use client" if any other relevant files which use browser APIs or use React hooks. 
 - NEVER add "use client" to app/layout.tsx — this file must remain a server component.
-- Only use "use client" in files that need it (e.g. use React hooks or browser APIs).
 
 Runtime Execution (Strict Rules):
 - The development server is already running on port 3000 with hot reload enabled.
