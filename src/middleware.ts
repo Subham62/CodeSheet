@@ -4,7 +4,8 @@ const isPublicRoute = createRouteMatcher([
     "/",
     "/sign-in(.*)",
     "/sign-up(.*)",
-    "/api(.*)"
+    "/api(.*)",
+    "/pricing(.*)"
     // NOTE: It absolutely doesn't matter that we are not protecting the api's in the middleware AS it is taken care by data access layer(here, tRPC) 
     // "/api/inngest(.*)",
     // "/api/trpc(.*)"         //   not visible the saved codesheets if not logged-in
