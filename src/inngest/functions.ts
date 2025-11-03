@@ -12,7 +12,7 @@ import {
 import { inngest } from "./client";
 import { getSandbox, lastAssistantTextMessageContent } from "./utils";
 import { PROMPT } from "@/prompt";
-import prisma from "@/lib/db";
+import {prisma} from "@/lib/db";
 
 interface AgentState {
   summary: string;
