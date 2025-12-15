@@ -18,6 +18,7 @@ import Link from "next/link";
 import { FileExplorer } from "@/components/file-explorer";
 import { UserControl } from "@/components/user-control";
 import { useAuth } from "@clerk/nextjs";
+import { ErrorBoundary } from "react-error-boundary";
 
 interface Props {
   projectId: string;
@@ -39,20 +40,24 @@ export const ProjectView = ({ projectId }: Props) => {
           className="flex flex-col h-full"
         >
           {/* Sticky Header */}
-          <Suspense fallback={<p className="p-2">Loading project...</p>}>
-            <ProjectHeader projectId={projectId} />
-          </Suspense>
+          <ErrorBoundary fallback={<p>Project Header Error!</p>}>
+            <Suspense fallback={<p className="p-2">Loading project...</p>}>
+              <ProjectHeader projectId={projectId} />
+            </Suspense>
+          </ErrorBoundary>
 
           {/* Scrollable Messages */}
           <div className="flex-1 min-h-0 overflow-y-auto">
-            <Suspense fallback={<p className="p-2">Loading messages...</p>}>
-              <MessagesContainer
-                projectId={projectId}
-                activeFragment={activeFragment}
-                setActiveFragment={setActiveFragment}
-              />
-              {/* if we use the deeper container like MessageContainer then it will not block the entire page as useSuspenseQuery takes time and now it is separate from this page and it is visually faster not really */}
-            </Suspense>
+            <ErrorBoundary fallback={<p>Message container Error!</p>}>
+              <Suspense fallback={<p className="p-2">Loading messages...</p>}>
+                <MessagesContainer
+                  projectId={projectId}
+                  activeFragment={activeFragment}
+                  setActiveFragment={setActiveFragment}
+                />
+                {/* if we use the deeper container like MessageContainer then it will not block the entire page as useSuspenseQuery takes time and now it is separate from this page and it is visually faster not really */}
+              </Suspense>
+            </ErrorBoundary>
           </div>
         </ResizablePanel>
 

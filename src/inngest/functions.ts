@@ -2,19 +2,62 @@ import { z } from "zod";
 import { Sandbox } from "@e2b/code-interpreter";
 import {
   gemini,
+  openai,
   createAgent,
   createTool,
   createNetwork,
   // Tool,
   type Tool,
   type Message,
-  createState
+  createState,
 } from "@inngest/agent-kit";
 
 import { inngest } from "./client";
-import { getSandbox, lastAssistantTextMessageContent, parseAgentOutput } from "./utils";
+import {
+  getSandbox,
+  lastAssistantTextMessageContent,
+  parseAgentOutput,
+} from "./utils";
 import { FRAGMENT_TITLE_PROMPT, PROMPT, RESPONSE_PROMPT } from "@/prompt";
-import {prisma} from "@/lib/db";
+import { prisma } from "@/lib/db";
+import { SANDBOX_TIMEOUT } from "./types";
+
+const openRouterModel = openai({
+  // model: "meta-llama/llama-3.1-70b-instruct",  // Any OpenRouter model
+  model: "openai/gpt-oss-20b:free",  // Any OpenRouter model
+  apiKey: process.env.OPENROUTER_API_KEY,
+  baseUrl: "https://openrouter.ai/api/v1",     // OpenRouter endpoint
+  defaultParameters: {
+    // temperature: 0.1,
+    // top_p: 0.9,
+    // max_completion_tokens: 2048,
+  }
+});
+
+// Groq model configuration (OpenAI-compatible)
+// Powerful model for complex coding tasks
+const groqModel = openai({
+  model: "llama-3.3-70b-versatile", // or "mixtral-8x7b-32768"
+  // model: "qwen/qwen3-32b",
+  apiKey: process.env.GROQ_API_KEY,
+  baseUrl: "https://api.groq.com/openai/v1",
+  defaultParameters: {
+    // temperature: 0.1,  // Lower temperature = more precise, less creative
+    // top_p: 0.9,
+    // frequency_penalty: 0.2,  // Reduces repetitive errors
+    // temperature: 0.2, // Medium = balanced creativity
+    // top_p: 0.9, // Standard = good mix
+    // frequency_penalty: 0.2, // Light repetition control
+    // presence_penalty: 0.2, // Light topic diversity
+  },
+});
+
+// Fast, cheaper model for simple tasks
+const fastModel = openai({
+  model: "llama-3.1-8b-instant",
+  apiKey: process.env.GROQ_API_KEY,
+  baseUrl: "https://api.groq.com/openai/v1",
+});
 
 interface AgentState {
   summary: string;
@@ -27,31 +70,36 @@ export const codeAgentFunction = inngest.createFunction(
   async ({ event, step }) => {
     const sandboxId = await step.run("get-sandbox-id", async () => {
       const sandbox = await Sandbox.create("codesheet-nextjs-test");
+      await sandbox.setTimeout(SANDBOX_TIMEOUT); // increase the sandbox time by 15 minutes
       return sandbox.sandboxId;
     });
 
-    const previousMessages = await step.run("get-previous-messages", async () => {
-      const formattedMessages : Message[] = [];
+    const previousMessages = await step.run(
+      "get-previous-messages",
+      async () => {
+        const formattedMessages: Message[] = [];
 
-      const messages = await prisma.message.findMany({
-        where: {
-          projectId: event.data.projectId,
-        },
-        orderBy: {
-          createdAt: "asc",  //  TODO: Change to "desc" if AI does not understand what is the latest message
-        },
-      });
+        const messages = await prisma.message.findMany({
+          where: {
+            projectId: event.data.projectId,
+          },
+          orderBy: {
+            createdAt: "desc", //  TODO: Change to "asc" if AI does not understand what is the latest message
+          },
+          take: 10, //  it will limit the agent to take in consideration last 5 messages for current one
+        });
 
-      for(const message of messages) {
-        formattedMessages.push({
-          type: "text",
-          role: message.role === "ASSISTANT" ? "assistant" : "user",
-          content: message.content
-        })
+        for (const message of messages) {
+          formattedMessages.push({
+            type: "text",
+            role: message.role === "ASSISTANT" ? "assistant" : "user",
+            content: message.content,
+          });
+        }
+
+        return formattedMessages.reverse();
       }
-
-      return formattedMessages;
-    })
+    );
 
     const state = createState<AgentState>(
       {
@@ -59,7 +107,7 @@ export const codeAgentFunction = inngest.createFunction(
         files: {},
       },
       {
-        messages: previousMessages
+        messages: previousMessages,
       }
     );
 
@@ -67,7 +115,9 @@ export const codeAgentFunction = inngest.createFunction(
       name: "code-agent",
       description: "An expert coding agent",
       system: PROMPT,
-      model: gemini({ model: "gemini-2.0-flash" }),
+      // model: gemini({ model: "gemini-2.0-flash" }),
+      // model: groqModel,
+      model: openRouterModel,
 
       tools: [
         createTool({
@@ -284,9 +334,9 @@ export const codeAgentFunction = inngest.createFunction(
     });
 
     // Run agent with user input
-    const result = await network.run(event.data.value, {state});
+    const result = await network.run(event.data.value, { state });
     // this above line replaced by below couples of lines(from --------- starts)
-    
+
     // -----------------
     // async function runAgentWithRetry(network: ReturnType<typeof createNetwork<AgentState>> , input: string, retries = 3) {
     //   for (let i = 0; i < retries; i++) {
@@ -307,18 +357,26 @@ export const codeAgentFunction = inngest.createFunction(
       name: "fragment-title-generator",
       description: "A fragment title generator",
       system: FRAGMENT_TITLE_PROMPT,
-      model: gemini({ model: "gemini-2.0-flash-lite" }),
+      // model: gemini({ model: "gemini-2.0-flash-lite" }),
+      // model: fastModel,
+      model: openRouterModel,
     });
 
     const responseGenerator = createAgent({
       name: "response-generator",
       description: "A response generator",
       system: RESPONSE_PROMPT,
-      model: gemini({ model: "gemini-2.0-flash-lite" }),
+      // model: gemini({ model: "gemini-2.0-flash-lite" }),
+      // model: fastModel,
+      model: openRouterModel,
     });
 
-    const {output: fragmentTitleOutput} = await fragmentTitleGenerator.run(result.state.data.summary);
-    const {output: responseOutput} = await responseGenerator.run(result.state.data.summary);
+    const { output: fragmentTitleOutput } = await fragmentTitleGenerator.run(
+      result.state.data.summary
+    );
+    const { output: responseOutput } = await responseGenerator.run(
+      result.state.data.summary
+    );
 
     // const generateFragmentTitle = () => {
     //   const output = fragmentTitleOutput[0];
