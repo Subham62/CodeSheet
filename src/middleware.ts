@@ -5,7 +5,9 @@ const isPublicRoute = createRouteMatcher([
     "/sign-in(.*)",
     "/sign-up(.*)",
     "/api(.*)",
-    "/pricing(.*)"
+    "/pricing(.*)",
+    "/published(.*)",  // ADDED THIS LINE - allow public access to published projects
+    "/projects/(.*)",   // ADDED THIS LINE - allow viewing published projects by ID
     // NOTE: It absolutely doesn't matter that we are not protecting the api's in the middleware AS it is taken care by data access layer(here, tRPC) 
     // "/api/inngest(.*)",
     // "/api/trpc(.*)"         //   not visible the saved codesheets if not logged-in
