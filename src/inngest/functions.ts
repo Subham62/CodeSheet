@@ -25,6 +25,7 @@ import { SANDBOX_TIMEOUT } from "./types";
 const openRouterModel = openai({
   // model: "meta-llama/llama-3.1-70b-instruct",  // Any OpenRouter model
   model: "openai/gpt-oss-20b:free",  // Any OpenRouter model
+  // model: "openai/gpt-oss-120b:free",  // Any OpenRouter model
   apiKey: process.env.OPENROUTER_API_KEY,
   baseUrl: "https://openrouter.ai/api/v1",     // OpenRouter endpoint
   defaultParameters: {

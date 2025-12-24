@@ -1,3 +1,85 @@
+// import { Button } from "@/components/ui/button";
+// import {
+//   DropdownMenu,
+//   DropdownMenuContent,
+//   DropdownMenuItem,
+//   DropdownMenuPortal,
+//   DropdownMenuRadioGroup,
+//   DropdownMenuRadioItem,
+//   DropdownMenuSeparator,
+//   DropdownMenuSub,
+//   DropdownMenuSubContent,
+//   DropdownMenuSubTrigger,
+//   DropdownMenuTrigger,
+// } from "@/components/ui/dropdown-menu";
+// import { useTRPC } from "@/trpc/client";
+// import { useSuspenseQuery } from "@tanstack/react-query";
+// import { ChevronDownIcon, ChevronLeftIcon, SunMoonIcon } from "lucide-react";
+// import { useTheme } from "next-themes";
+// import Image from "next/image";
+// import Link from "next/link";
+
+// interface Props {
+//   projectId: string;
+// }
+
+// export const ProjectHeader = ({ projectId }: Props) => {
+//   const trpc = useTRPC();
+//   const { data: project } = useSuspenseQuery(
+//     trpc.projects.getOne.queryOptions({ id: projectId })
+//   );
+
+//   const { setTheme, theme } = useTheme();
+//   return (
+//     <header className="p-2 flex justify-between items-center border-b">
+//       <DropdownMenu>
+//         <DropdownMenuTrigger asChild>
+//           <Button
+//             variant="ghost"
+//             size="sm"
+//             className="focus-visible:ring-0 hover:bg-transparent hover:opacity-75 transition-opacity pl-2"
+//           >
+//             <Image src="/logo.svg" alt="CodeSheet" width={18} height={18} />
+//             <span>{project.name}</span>
+//             <ChevronDownIcon />
+//           </Button>
+//         </DropdownMenuTrigger>
+//         <DropdownMenuContent side="bottom" align="start">
+//           <DropdownMenuItem asChild>
+//             <Link href="/">
+//               <ChevronLeftIcon />
+//               <span>Go to Dashboard</span>
+//             </Link>
+//           </DropdownMenuItem>
+//           <DropdownMenuSeparator />
+//           <DropdownMenuSub>
+//             <DropdownMenuSubTrigger className="gap-2">
+//               <SunMoonIcon className="size-4 text-muted-foreground" />
+//               <span>Appearance</span>
+//             </DropdownMenuSubTrigger>
+//             <DropdownMenuPortal>
+//               <DropdownMenuSubContent>
+//                 <DropdownMenuRadioGroup value={theme} onValueChange={setTheme}>
+//                   <DropdownMenuRadioItem value="light">
+//                     <span>Light</span>
+//                   </DropdownMenuRadioItem>
+//                   <DropdownMenuRadioItem value="dark">
+//                     <span>Dark</span>
+//                   </DropdownMenuRadioItem>
+//                   <DropdownMenuRadioItem value="system">
+//                     <span>System</span>
+//                   </DropdownMenuRadioItem>
+//                 </DropdownMenuRadioGroup>
+//               </DropdownMenuSubContent>
+//             </DropdownMenuPortal>
+//           </DropdownMenuSub>
+//         </DropdownMenuContent>
+//       </DropdownMenu>
+//     </header>
+//   );
+// };
+
+
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -18,6 +100,7 @@ import { ChevronDownIcon, ChevronLeftIcon, SunMoonIcon } from "lucide-react";
 import { useTheme } from "next-themes";
 import Image from "next/image";
 import Link from "next/link";
+import { useUser } from "@clerk/nextjs";
 
 interface Props {
   projectId: string;
@@ -25,11 +108,18 @@ interface Props {
 
 export const ProjectHeader = ({ projectId }: Props) => {
   const trpc = useTRPC();
+  const { user } = useUser();
+  
+  // Used getById instead of getOne - it's public and handles authorization internally
   const { data: project } = useSuspenseQuery(
-    trpc.projects.getOne.queryOptions({ id: projectId })
+    trpc.projects.getById.queryOptions({ projectId })
   );
 
   const { setTheme, theme } = useTheme();
+  
+  // Check if current user is the owner
+  const isOwner = user?.id === project.userId;
+
   return (
     <header className="p-2 flex justify-between items-center border-b">
       <DropdownMenu>
@@ -41,40 +131,49 @@ export const ProjectHeader = ({ projectId }: Props) => {
           >
             <Image src="/logo.svg" alt="CodeSheet" width={18} height={18} />
             <span>{project.name}</span>
-            <ChevronDownIcon />
+            {isOwner && <ChevronDownIcon />}
           </Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent side="bottom" align="start">
-          <DropdownMenuItem asChild>
-            <Link href="/">
-              <ChevronLeftIcon />
-              <span>Go to Dashboard</span>
-            </Link>
-          </DropdownMenuItem>
-          <DropdownMenuSeparator />
-          <DropdownMenuSub>
-            <DropdownMenuSubTrigger className="gap-2">
-              <SunMoonIcon className="size-4 text-muted-foreground" />
-              <span>Appearance</span>
-            </DropdownMenuSubTrigger>
-            <DropdownMenuPortal>
-              <DropdownMenuSubContent>
-                <DropdownMenuRadioGroup value={theme} onValueChange={setTheme}>
-                  <DropdownMenuRadioItem value="light">
-                    <span>Light</span>
-                  </DropdownMenuRadioItem>
-                  <DropdownMenuRadioItem value="dark">
-                    <span>Dark</span>
-                  </DropdownMenuRadioItem>
-                  <DropdownMenuRadioItem value="system">
-                    <span>System</span>
-                  </DropdownMenuRadioItem>
-                </DropdownMenuRadioGroup>
-              </DropdownMenuSubContent>
-            </DropdownMenuPortal>
-          </DropdownMenuSub>
-        </DropdownMenuContent>
+        {isOwner && (
+          <DropdownMenuContent side="bottom" align="start">
+            <DropdownMenuItem asChild>
+              <Link href="/">
+                <ChevronLeftIcon />
+                <span>Go to Dashboard</span>
+              </Link>
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuSub>
+              <DropdownMenuSubTrigger className="gap-2">
+                <SunMoonIcon className="size-4 text-muted-foreground" />
+                <span>Appearance</span>
+              </DropdownMenuSubTrigger>
+              <DropdownMenuPortal>
+                <DropdownMenuSubContent>
+                  <DropdownMenuRadioGroup value={theme} onValueChange={setTheme}>
+                    <DropdownMenuRadioItem value="light">
+                      <span>Light</span>
+                    </DropdownMenuRadioItem>
+                    <DropdownMenuRadioItem value="dark">
+                      <span>Dark</span>
+                    </DropdownMenuRadioItem>
+                    <DropdownMenuRadioItem value="system">
+                      <span>System</span>
+                    </DropdownMenuRadioItem>
+                  </DropdownMenuRadioGroup>
+                </DropdownMenuSubContent>
+              </DropdownMenuPortal>
+            </DropdownMenuSub>
+          </DropdownMenuContent>
+        )}
       </DropdownMenu>
+      
+      {/* Show published badge for non-owners */}
+      {!isOwner && project.isPublished && (
+        <span className="text-xs px-2 py-1 rounded-full bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400">
+          Published Project
+        </span>
+      )}
     </header>
   );
 };
